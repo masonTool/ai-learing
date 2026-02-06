@@ -23,10 +23,18 @@ Semantic Kernel 是微软开源的 AI 开发 SDK，核心理念是:
 适用场景: 企业级 AI 应用、Microsoft 生态集成、多语言团队
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
+
 from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
 from datetime import datetime
 import json
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 
 # ============================================================
@@ -104,17 +112,27 @@ class SemanticFunction:
         """
         执行语义函数
         
-        实际实现会调用 LLM API
+        调用真实 LLM API
         """
         # 渲染模板
         prompt = self._render_template(context)
         
-        # 调用 LLM (模拟)
         print(f"  [SemanticFunction] {self.name}")
         print(f"  提示词: {prompt[:100]}...")
         
-        # 模拟 LLM 响应
-        return f"基于提示词 '{prompt[:30]}...' 的生成结果"
+        # 调用真实 LLM
+        try:
+            llm = kernel.get_ai_service()
+            messages = [
+                SystemMessage(content=f"你是一个 helpful 的 AI 助手。{self.description}"),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = llm.invoke(messages)
+            return response.content.strip()
+            
+        except Exception as e:
+            return f"调用 LLM 出错: {str(e)[:100]}"
     
     def _render_template(self, context: SKContext) -> str:
         """渲染模板"""
@@ -159,10 +177,22 @@ class SemanticKernel:
     4. 管理记忆系统
     """
     
-    def __init__(self):
+    def __init__(self, llm=None):
         self.plugins: Dict[str, SKPlugin] = {}
         self.ai_services: Dict[str, Any] = {}
         self.memory: Dict[str, List[str]] = {}
+        
+        # 初始化默认 LLM
+        self._default_llm = llm or ChatOpenAI(
+            model=config.MODEL,
+            api_key=config.API_KEY,
+            base_url=config.BASE_URL,
+            temperature=0.7
+        )
+    
+    def get_ai_service(self) -> Any:
+        """获取 AI 服务（LLM）"""
+        return self._default_llm
     
     def import_plugin(self, plugin: SKPlugin):
         """
@@ -298,31 +328,85 @@ class Planner:
         
         print(f"[Planner] 可用函数: {available_functions}")
         
-        # 实际实现会使用 LLM 生成计划
-        # 这里使用简化的启发式规则
-        steps = self._generate_steps(goal, available_functions)
+        # 使用 LLM 生成计划
+        steps = self._generate_steps_with_llm(goal, available_functions)
         
         return Plan(goal=goal, steps=steps)
     
-    def _generate_steps(self, goal: str, available_functions: List[str]) -> List[str]:
-        """生成执行步骤"""
+    def _generate_steps_with_llm(self, goal: str, available_functions: List[str]) -> List[str]:
+        """使用 LLM 生成执行步骤"""
+        
+        if not available_functions:
+            return ["GeneralPlugin.Process"]
+        
+        prompt = f"""你是一个任务规划助手。请为以下目标创建一个执行计划。
+
+目标: {goal}
+
+可用的函数:
+{chr(10).join([f"- {f}" for f in available_functions])}
+
+请分析目标，并选择最合适的函数来创建一个执行计划。
+以 JSON 数组格式输出要执行的函数列表（按顺序）。
+
+示例输出:
+["WriterPlugin.Brainstorm", "WriterPlugin.Compose"]
+
+只输出 JSON 数组，不要其他内容。"""
+
+        try:
+            llm = self.kernel.get_ai_service()
+            messages = [
+                SystemMessage(content="你是一个任务规划助手，负责创建执行计划。只输出 JSON 数组。"),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = llm.invoke(messages)
+            content = response.content.strip()
+            
+            # 清理可能的 markdown 代码块
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            steps = json.loads(content)
+            
+            # 验证步骤是否有效
+            if isinstance(steps, list) and len(steps) > 0:
+                # 过滤掉不在可用函数中的步骤
+                valid_steps = [s for s in steps if s in available_functions]
+                if valid_steps:
+                    return valid_steps
+            
+        except Exception as e:
+            print(f"  [规划出错: {e}]")
+        
+        # 回退到简化规则
+        return self._generate_steps_fallback(goal, available_functions)
+    
+    def _generate_steps_fallback(self, goal: str, available_functions: List[str]) -> List[str]:
+        """回退的启发式规则生成步骤"""
         steps = []
         
         # 简化的规则引擎
         if "写" in goal or "生成" in goal or "create" in goal.lower():
-            if "WriterPlugin" in str(available_functions):
+            if "WriterPlugin.Brainstorm" in available_functions:
                 steps.append("WriterPlugin.Brainstorm")
+            if "WriterPlugin.Compose" in available_functions:
                 steps.append("WriterPlugin.Compose")
+            if "WriterPlugin.Translate" in available_functions:
                 steps.append("WriterPlugin.Translate")
         
         if "分析" in goal or "analyze" in goal.lower():
-            if "AnalysisPlugin" in str(available_functions):
+            if "AnalysisPlugin.ExtractData" in available_functions:
                 steps.append("AnalysisPlugin.ExtractData")
+            if "AnalysisPlugin.Summarize" in available_functions:
                 steps.append("AnalysisPlugin.Summarize")
         
-        if not steps:
-            # 默认使用通用处理
-            steps.append("GeneralPlugin.Process")
+        if not steps and available_functions:
+            # 默认使用第一个可用函数
+            steps.append(available_functions[0])
         
         return steps
 
@@ -466,14 +550,14 @@ class AnalysisPlugin:
 # 第五部分: 使用示例
 # ============================================================
 
-def example_1_basic_usage():
+def example_1_basic_usage(llm=None):
     """示例 1: 基础使用"""
     print("=" * 70)
     print("示例 1: Semantic Kernel 基础使用")
     print("=" * 70)
     
     # 创建 Kernel
-    kernel = SemanticKernel()
+    kernel = SemanticKernel(llm=llm)
     
     # 创建并导入插件
     writer_plugin = WriterPlugin().get_plugin()
@@ -489,13 +573,13 @@ def example_1_basic_usage():
     print(f"\n执行结果: {result.get('WriterPlugin.Brainstorm_result')}")
 
 
-def example_2_chained_functions():
+def example_2_chained_functions(llm=None):
     """示例 2: 链式函数调用"""
     print("\n" + "=" * 70)
     print("示例 2: 链式函数调用")
     print("=" * 70)
     
-    kernel = SemanticKernel()
+    kernel = SemanticKernel(llm=llm)
     
     # 导入多个插件
     kernel.import_plugin(WriterPlugin().get_plugin())
@@ -518,13 +602,13 @@ def example_2_chained_functions():
     print(f"最终结果: {result.get('input')}")
 
 
-def example_3_planner():
+def example_3_planner(llm=None):
     """示例 3: 使用 Planner"""
     print("\n" + "=" * 70)
     print("示例 3: 使用 Planner 自动生成计划")
     print("=" * 70)
     
-    kernel = SemanticKernel()
+    kernel = SemanticKernel(llm=llm)
     
     # 导入插件
     kernel.import_plugin(WriterPlugin().get_plugin())
@@ -547,13 +631,13 @@ def example_3_planner():
     print("\n计划执行完成")
 
 
-def example_4_memory():
+def example_4_memory(llm=None):
     """示例 4: 使用记忆系统"""
     print("\n" + "=" * 70)
     print("示例 4: 使用记忆系统")
     print("=" * 70)
     
-    kernel = SemanticKernel()
+    kernel = SemanticKernel(llm=llm)
     
     # 注册记忆
     kernel.register_memory("user_preferences", "用户喜欢简洁的技术文章")
@@ -569,14 +653,14 @@ def example_4_memory():
         print(f"  {i}. {mem}")
 
 
-def example_5_complete_app():
+def example_5_complete_app(llm=None):
     """示例 5: 完整应用"""
     print("\n" + "=" * 70)
     print("示例 5: 完整应用 - 内容生成系统")
     print("=" * 70)
     
     # 创建 Kernel
-    kernel = SemanticKernel()
+    kernel = SemanticKernel(llm=llm)
     
     # 导入插件
     kernel.import_plugin(WriterPlugin().get_plugin())
@@ -619,12 +703,20 @@ def main():
     print("特点: 企业级设计、多语言支持、自动规划")
     print()
     
+    # 初始化 LLM
+    llm = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
+        temperature=0.7
+    )
+    
     # 运行示例
-    example_1_basic_usage()
-    example_2_chained_functions()
-    example_3_planner()
-    example_4_memory()
-    example_5_complete_app()
+    example_1_basic_usage(llm=llm)
+    example_2_chained_functions(llm=llm)
+    example_3_planner(llm=llm)
+    example_4_memory(llm=llm)
+    example_5_complete_app(llm=llm)
     
     print("\n" + "=" * 70)
     print("所有示例运行完成")

@@ -23,6 +23,11 @@ AutoGen 是微软开源的多 Agent 框架，核心思想是:
 import autogen
 from typing import Dict, List
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
+
 
 # ============================================================
 # 第一部分: 基础配置
@@ -30,18 +35,19 @@ from typing import Dict, List
 
 def get_llm_config():
     """
-    配置 LLM 参数
-    
+    配置 LLM 参数（从根目录 config.py 读取）
+
     AutoGen 支持多种后端，包括 OpenAI、Azure 等
     """
+    config_dict = {
+        "model": config.MODEL,
+        "api_key": config.API_KEY,
+    }
+    if config.BASE_URL:
+        config_dict["base_url"] = config.BASE_URL
+
     return {
-        "config_list": [
-            {
-                "model": "gpt-4o-mini",
-                "api_key": "your-api-key-here",  # 请替换为你的 API Key
-                # "base_url": "https://api.openai.com/v1",  # 可选：自定义 API 地址
-            }
-        ],
+        "config_list": [config_dict],
         "temperature": 0.7,
         "timeout": 120,
     }

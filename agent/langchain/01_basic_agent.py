@@ -20,6 +20,10 @@ from langchain.memory import ConversationBufferMemory
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_openai import ChatOpenAI
 
+import sys
+import os
+# 把项目根目录加入路径，统一读取根目录的 config.py
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import config
 
 
@@ -92,7 +96,7 @@ def create_basic_agent():
     这个过程会循环执行，直到 Agent 认为任务完成
     """
     
-    # 1. 初始化 LLM（从 config.py 读取）
+    # 1. 初始化 LLM（从根目录 config.py 读取）
     llm = ChatOpenAI(
         model=config.MODEL,
         api_key=config.API_KEY,

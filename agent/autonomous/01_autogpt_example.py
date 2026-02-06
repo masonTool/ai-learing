@@ -30,11 +30,18 @@ AutoGPT 是最早爆红的自主型 Agent 框架，其核心理念是:
 适用场景: 复杂研究任务、数据分析、自动化办公、代码生成
 """
 
+import sys
 import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
+
 import json
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 
 # ============================================================
@@ -167,15 +174,23 @@ class AutoGPT:
     实现自主任务执行的循环逻辑
     """
     
-    def __init__(self, ai_name: str = "AutoGPT", api_key: Optional[str] = None):
+    def __init__(self, ai_name: str = "AutoGPT", llm=None):
         self.ai_name = ai_name
         self.memory = AutoGPTMemory()
         self.tools = AutoGPTTools(self.memory)
         self.max_iterations = 5
         
+        # 初始化 LLM
+        self.llm = llm or ChatOpenAI(
+            model=config.MODEL,
+            api_key=config.API_KEY,
+            base_url=config.BASE_URL,
+            temperature=0.7
+        )
+        
         # 工具描述
         self.tools_desc = {
-            "search": "搜索互联网获取信息",
+            "web_search": "搜索互联网获取信息",
             "write_file": "将内容写入文件",
             "read_file": "读取文件内容",
             "execute_python": "执行 Python 代码",
@@ -240,50 +255,82 @@ class AutoGPT:
                 return f"执行出错: {str(e)}"
         return f"未知工具: {action_name}"
     
-    def _simulate_llm_response(self, goal: str, context: str, iteration: int) -> Dict:
+    def _get_llm_response(self, goal: str, context: str, iteration: int) -> Dict:
         """
-        模拟 LLM 响应
+        调用真实 LLM 获取响应
         
-        实际使用中会调用 OpenAI API
-        这里使用模拟数据展示流程
+        使用 LangChain ChatOpenAI 调用配置的模型
         """
         
-        # 根据迭代次数模拟不同的响应
-        if iteration == 0:
+        tools_list = "\n".join(f"- {name}: {desc}" for name, desc in self.tools_desc.items())
+        
+        prompt = f"""你是 {self.ai_name}，一个自主 AI 助手。当前是第 {iteration + 1} 轮迭代。
+
+目标: {goal}
+
+历史记忆:
+{context}
+
+可用工具:
+{tools_list}
+
+指令:
+1. 分析当前情况，思考如何完成目标
+2. 制定一个清晰的计划
+3. 选择合适的工具执行下一步
+4. 自我反思，确保计划合理
+5. 使用以下 JSON 格式响应:
+
+{{
+    "thoughts": "当前情况的分析",
+    "reasoning": "为什么这样做",
+    "plan": "接下来的步骤",
+    "criticism": "自我反思",
+    "speak": "对用户的简要说明",
+    "action": {{
+        "name": "工具名称(web_search/write_file/read_file/execute_python/task_complete)",
+        "args": {{"参数名": "参数值"}}
+    }}
+}}
+
+重要:
+- 始终保持目标导向
+- 如果任务完成，使用 task_complete 工具
+- 不确定时使用 web_search 工具搜索信息
+- 反思你的计划是否合理高效
+- 如果已经搜索过相关信息，应该执行代码或完成任务
+- 最多 3-5 轮迭代，合理安排进度
+
+请直接输出 JSON，不要添加 markdown 代码块标记。"""
+
+        try:
+            messages = [
+                SystemMessage(content="你是一个自主 AI Agent，负责分析情况并制定行动计划。只输出 JSON 格式。"),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.llm.invoke(messages)
+            content = response.content
+            
+            # 清理可能的 markdown 代码块
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            return json.loads(content)
+        except Exception as e:
+            print(f"  [LLM 调用出错: {e}]")
+            # 回退到完成任务
             return {
-                "thoughts": f"我需要完成目标: {goal}",
-                "reasoning": "首先需要收集相关信息，了解当前情况",
-                "plan": "1. 搜索相关信息\n2. 分析收集到的数据\n3. 生成输出",
-                "criticism": "计划比较粗略，需要根据搜索结果调整",
-                "speak": "我开始分析任务，首先搜索相关信息",
-                "action": {
-                    "name": "search",
-                    "args": {"query": goal}
-                }
-            }
-        elif iteration == 1:
-            return {
-                "thoughts": "已经获取了基础信息，现在需要处理数据",
-                "reasoning": "根据目标，我需要执行一些计算或分析",
-                "plan": "1. 执行必要的计算\n2. 整理结果\n3. 完成任务",
-                "criticism": "之前的搜索提供了良好的基础",
-                "speak": "正在处理收集到的信息",
-                "action": {
-                    "name": "execute_python",
-                    "args": {"code": "1 + 1"}
-                }
-            }
-        else:
-            # 最后完成
-            return {
-                "thoughts": "任务已接近完成",
-                "reasoning": "已经获取了所有需要的信息并进行了处理",
-                "plan": "完成任务并提交结果",
-                "criticism": "执行过程顺利，没有明显问题",
-                "speak": "任务即将完成",
+                "thoughts": f"调用 LLM 出错: {str(e)}",
+                "reasoning": "出错，终止任务",
+                "plan": "结束",
+                "criticism": "应该更好地处理错误",
+                "speak": "遇到问题，需要人工介入",
                 "action": {
                     "name": "task_complete",
-                    "args": {"result": f"成功完成目标: {goal}"}
+                    "args": {"result": f"任务中断，原因: {str(e)}"}
                 }
             }
     
@@ -310,9 +357,8 @@ class AutoGPT:
             # 1. 获取上下文
             context = self.memory.get_context()
             
-            # 2. 模拟 LLM 思考和决策
-            # 实际使用会调用: openai.ChatCompletion.create(...)
-            response = self._simulate_llm_response(goal, context, iteration)
+            # 2. 调用 LLM 思考和决策
+            response = self._get_llm_response(goal, context, iteration)
             
             # 3. 显示思考过程
             print(f"\n思考: {response['thoughts']}")
@@ -356,8 +402,16 @@ def main():
     主函数：演示 AutoGPT 的使用
     """
     
+    # 初始化 LLM
+    llm = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
+        temperature=0.7
+    )
+    
     # 创建 AutoGPT 实例
-    autogpt = AutoGPT(ai_name="智能助手")
+    autogpt = AutoGPT(ai_name="智能助手", llm=llm)
     
     # 示例 1: 简单任务
     print("\n" + "=" * 70)
@@ -370,7 +424,7 @@ def main():
     print("示例 2: 文件处理任务")
     print("=" * 70)
     
-    autogpt2 = AutoGPT(ai_name="文件助手")
+    autogpt2 = AutoGPT(ai_name="文件助手", llm=llm)
     autogpt2.run("创建一个包含 Python 学习资源的文档")
     
     print("\n" + "=" * 70)

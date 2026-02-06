@@ -21,10 +21,18 @@ Phidata 是一个轻量级的 AI 助手框架，核心理念是:
 适用场景: 快速原型开发、轻量级应用、嵌入式助手
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
+
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
 import json
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 
 # ============================================================
@@ -101,29 +109,36 @@ class PhiAssistant:
     def __init__(
         self,
         name: str = "助手",
-        model: str = "gpt-4o-mini",
         instructions: Optional[str] = None,
         tools: Optional[List[Tool]] = None,
         knowledge_base: Optional[KnowledgeBase] = None,
-        show_tool_calls: bool = True
+        show_tool_calls: bool = True,
+        llm=None
     ):
         """
         初始化助手
         
         参数:
             name: 助手名称
-            model: 使用的模型
             instructions: 系统指令
             tools: 工具列表
             knowledge_base: 知识库
             show_tool_calls: 是否显示工具调用过程
+            llm: LangChain LLM 实例
         """
         self.name = name
-        self.model = model
         self.instructions = instructions or "你是一个有帮助的 AI 助手"
         self.tools = tools or []
         self.knowledge_base = knowledge_base
         self.show_tool_calls = show_tool_calls
+        
+        # 初始化 LLM
+        self.llm = llm or ChatOpenAI(
+            model=config.MODEL,
+            api_key=config.API_KEY,
+            base_url=config.BASE_URL,
+            temperature=0.7
+        )
         
         # 对话历史
         self.messages: List[Message] = []
@@ -223,18 +238,33 @@ class PhiAssistant:
         """
         生成回复
         
-        实际使用会调用 LLM API
-        这里使用简化的模拟回复
+        调用 LLM 生成回复
         """
-        # 检查知识库
+        # 构建完整的系统提示
+        full_system_prompt = f"{self.instructions}\n\n{system_prompt}"
+        
+        # 检查知识库，如果有相关内容则添加
+        kb_context = ""
         if self.knowledge_base:
             kb_results = self.knowledge_base.search(message)
             if kb_results:
-                context = "\n".join([r["content"] for r in kb_results[:2]])
-                return f"根据我的知识库:\n{context}\n\n希望这能帮到您！"
+                kb_context = "\n".join([r["content"] for r in kb_results[:2]])
+                full_system_prompt += f"\n\n知识库相关信息:\n{kb_context}\n请基于以上信息回答用户问题。"
         
-        # 默认回复
-        return f"您好！我是 {self.name}。我收到了您的问题: '{message}'。我可以帮您解答各种问题。"
+        try:
+            messages = [
+                SystemMessage(content=full_system_prompt),
+                HumanMessage(content=message)
+            ]
+            
+            response = self.llm.invoke(messages)
+            return response.content.strip()
+            
+        except Exception as e:
+            # 出错时回退到知识库或默认回复
+            if kb_context:
+                return f"根据我的知识库:\n{kb_context}\n\n希望这能帮到您！(系统提示: 调用 LLM 出错)"
+            return f"您好！我是 {self.name}。我收到了您的问题。暂时无法调用 LLM，请稍后再试。"
     
     def get_chat_history(self) -> List[Dict]:
         """获取对话历史"""
@@ -261,7 +291,7 @@ class PhiAssistant:
 # 第三部分: 使用示例
 # ============================================================
 
-def example_1_basic_assistant():
+def example_1_basic_assistant(llm=None):
     """示例 1: 基础助手"""
     print("\n" + "=" * 70)
     print("示例 1: 基础助手")
@@ -270,7 +300,8 @@ def example_1_basic_assistant():
     # 创建基础助手
     assistant = PhiAssistant(
         name="基础助手",
-        instructions="你是一个友好的 AI 助手，乐于助人。"
+        instructions="你是一个友好的 AI 助手，乐于助人。",
+        llm=llm
     )
     
     # 对话
@@ -289,7 +320,7 @@ def example_1_basic_assistant():
     print(f"\n统计: 运行 {assistant.run_count} 次")
 
 
-def example_2_assistant_with_tools():
+def example_2_assistant_with_tools(llm=None):
     """示例 2: 带工具的助手"""
     print("\n" + "=" * 70)
     print("示例 2: 带工具的助手")
@@ -324,7 +355,8 @@ def example_2_assistant_with_tools():
         name="工具助手",
         instructions="你是一个有帮助的助手，可以使用工具来解决问题。",
         tools=tools,
-        show_tool_calls=True
+        show_tool_calls=True,
+        llm=llm
     )
     
     # 对话
@@ -342,7 +374,7 @@ def example_2_assistant_with_tools():
     print(f"\n统计: 运行 {assistant.run_count} 次, 工具调用 {assistant.tool_calls_count} 次")
 
 
-def example_3_assistant_with_knowledge():
+def example_3_assistant_with_knowledge(llm=None):
     """示例 3: 带知识库的助手"""
     print("\n" + "=" * 70)
     print("示例 3: 带知识库的助手")
@@ -371,7 +403,8 @@ def example_3_assistant_with_knowledge():
     assistant = PhiAssistant(
         name="客服助手",
         instructions="你是公司的客服助手，基于知识库回答用户问题。",
-        knowledge_base=kb
+        knowledge_base=kb,
+        llm=llm
     )
     
     # 对话
@@ -387,7 +420,7 @@ def example_3_assistant_with_knowledge():
         print(f"助手: {response}")
 
 
-def example_4_data_analyst_assistant():
+def example_4_data_analyst_assistant(llm=None):
     """示例 4: 数据分析师助手"""
     print("\n" + "=" * 70)
     print("示例 4: 数据分析师助手")
@@ -423,7 +456,8 @@ def example_4_data_analyst_assistant():
     assistant = PhiAssistant(
         name="数据分析师",
         instructions="你是一个专业的数据分析师，帮助用户理解和分析数据。",
-        tools=tools
+        tools=tools,
+        llm=llm
     )
     
     # 对话
@@ -452,11 +486,19 @@ def main():
     print("Phidata AI 助手示例")
     print("=" * 70)
     
+    # 初始化 LLM
+    llm = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
+        temperature=0.7
+    )
+    
     # 运行示例
-    example_1_basic_assistant()
-    example_2_assistant_with_tools()
-    example_3_assistant_with_knowledge()
-    example_4_data_analyst_assistant()
+    example_1_basic_assistant(llm=llm)
+    example_2_assistant_with_tools(llm=llm)
+    example_3_assistant_with_knowledge(llm=llm)
+    example_4_data_analyst_assistant(llm=llm)
     
     print("\n" + "=" * 70)
     print("所有示例结束")

@@ -28,10 +28,18 @@ BabyAGI 是一个任务驱动的自主 Agent，核心理念是:
 适用场景: 研究任务、信息收集、项目管理、待办事项自动化
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
+
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 import json
 from datetime import datetime
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 
 # ============================================================
@@ -158,17 +166,25 @@ class BabyAGI:
     实现任务驱动的自主执行循环
     """
     
-    def __init__(self, objective: str, api_key: Optional[str] = None):
+    def __init__(self, objective: str, llm=None):
         """
         初始化 BabyAGI
         
         参数:
             objective: 要完成的最终目标
-            api_key: API 密钥（实际使用）
+            llm: LangChain LLM 实例
         """
         self.objective = objective
         self.task_manager = TaskManager()
         self.max_iterations = 5
+        
+        # 初始化 LLM
+        self.llm = llm or ChatOpenAI(
+            model=config.MODEL,
+            api_key=config.API_KEY,
+            base_url=config.BASE_URL,
+            temperature=0.7
+        )
         
         # 初始化第一个任务
         self.task_manager.add_task(
@@ -180,48 +196,76 @@ class BabyAGI:
         """
         根据当前任务结果创建新任务
         
-        这是 BabyAGI 的核心逻辑之一
-        根据执行结果动态生成后续任务
-        
-        参数:
-            current_task: 刚刚完成的任务
-            result: 任务执行结果
-            
-        返回:
-            新任务列表，每个任务包含 name 和 priority
+        调用 LLM 基于 objective 和当前结果生成新任务
         """
-        # 模拟 LLM 创建新任务
-        # 实际使用会调用 API，基于 objective 和当前结果生成新任务
         
-        new_tasks = []
-        
-        # 根据当前任务和结果生成相关新任务
-        current_task_id = current_task.task_id
-        
-        if "研究" in current_task.task_name:
-            new_tasks.extend([
-                {"name": f"深入分析目标的关键要素", "priority": 2},
-                {"name": f"收集相关的背景信息", "priority": 3},
-                {"name": f"整理初步发现", "priority": 4}
-            ])
-        elif "分析" in current_task.task_name:
-            new_tasks.extend([
-                {"name": f"总结分析结果", "priority": 2},
-                {"name": f"识别关键模式和趋势", "priority": 3}
-            ])
-        elif "收集" in current_task.task_name:
-            new_tasks.extend([
-                {"name": f"验证收集的信息", "priority": 2},
-                {"name": f"整合数据到知识库", "priority": 3}
-            ])
-        else:
-            # 默认创建总结任务
-            new_tasks.append({
-                "name": f"总结关于 '{self.objective}' 的发现",
-                "priority": 1
-            })
-        
-        return new_tasks
+        prompt = f"""你是 BabyAGI 的任务创建助手。
+
+总体目标: {self.objective}
+
+刚刚完成的任务:
+- 任务名称: {current_task.task_name}
+- 执行结果: {result}
+
+已完成的任务列表:
+{self.task_manager.get_task_context()}
+
+当前待完成任务数: {len([t for t in self.task_manager.tasks if t.status == 'pending'])}
+
+请根据以上信息，创建 1-3 个新的后续任务来推进总体目标的完成。
+
+要求:
+1. 新任务必须与总体目标相关
+2. 考虑刚刚完成的任务结果
+3. 任务应该具体可执行
+4. 合理设置优先级（1-5，数字越小优先级越高）
+
+请以 JSON 格式输出新任务列表:
+[
+    {{"name": "任务1描述", "priority": 1}},
+    {{"name": "任务2描述", "priority": 2}}
+]
+
+如果认为目标已基本完成，可以返回空列表 [] 或一个总结任务。
+
+只输出 JSON，不要添加 markdown 代码块标记。"""
+
+        try:
+            messages = [
+                SystemMessage(content="你是一个任务规划助手，负责创建结构化的任务列表。只输出 JSON 数组。"),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.llm.invoke(messages)
+            content = response.content
+            
+            # 清理可能的 markdown 代码块
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            
+            new_tasks = json.loads(content)
+            
+            # 验证格式
+            if not isinstance(new_tasks, list):
+                new_tasks = []
+            
+            # 确保每个任务有正确的字段
+            validated_tasks = []
+            for task in new_tasks:
+                if isinstance(task, dict) and "name" in task:
+                    validated_tasks.append({
+                        "name": task["name"],
+                        "priority": task.get("priority", 3)
+                    })
+            
+            return validated_tasks
+            
+        except Exception as e:
+            print(f"  [创建任务出错: {e}]")
+            # 回退到默认任务
+            return [{"name": f"继续推进: {self.objective}", "priority": 2}]
     
     def _prioritize_tasks(self):
         """
@@ -237,6 +281,8 @@ class BabyAGI:
         """
         执行任务
         
+        调用 LLM 实际执行任务
+        
         参数:
             task: 要执行的任务
             
@@ -245,26 +291,41 @@ class BabyAGI:
         """
         print(f"  执行任务: {task.task_name}")
         
-        # 模拟任务执行
-        # 实际使用会调用相应的工具或 API
-        
-        if "研究" in task.task_name:
-            return f"已完成对 '{self.objective}' 的初步研究，识别出主要研究方向"
-        
-        elif "分析" in task.task_name:
-            return f"分析完成，发现 3 个关键要素需要进一步探索"
-        
-        elif "收集" in task.task_name:
-            return f"收集了 10 条相关信息，其中 5 条具有高价值"
-        
-        elif "验证" in task.task_name:
-            return f"信息验证完成，确认 80% 的信息准确可靠"
-        
-        elif "总结" in task.task_name:
-            return f"已生成关于 '{self.objective}' 的综合总结报告"
-        
-        else:
-            return f"任务 '{task.task_name}' 执行完成"
+        prompt = f"""你是 BabyAGI 的任务执行助手。
+
+总体目标: {self.objective}
+当前任务: {task.task_name}
+
+任务上下文:
+{self.task_manager.get_task_context()}
+
+请执行当前任务，并返回具体的执行结果。
+结果应该:
+1. 具体且有信息量
+2. 与总体目标相关
+3. 包含可以指导下一步行动的洞察
+4. 简洁明了（100-300字）
+
+直接输出执行结果，不需要额外解释。"""
+
+        try:
+            messages = [
+                SystemMessage(content="你是一个任务执行助手，负责完成具体的任务并返回结果。"),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.llm.invoke(messages)
+            result = response.content.strip()
+            
+            # 截断过长的结果
+            if len(result) > 500:
+                result = result[:500] + "..."
+            
+            return result
+            
+        except Exception as e:
+            print(f"  [执行任务出错: {e}]")
+            return f"任务执行遇到错误: {str(e)[:100]}"
     
     def run(self):
         """
@@ -365,8 +426,8 @@ class AdvancedBabyAGI(BabyAGI):
     - 执行历史分析
     """
     
-    def __init__(self, objective: str, api_key: Optional[str] = None):
-        super().__init__(objective, api_key)
+    def __init__(self, objective: str, llm=None):
+        super().__init__(objective, llm)
         self.execution_history: List[Dict] = []
     
     def _execute_task(self, task: Task) -> str:
@@ -401,6 +462,14 @@ def main():
     """
     主函数：演示 BabyAGI 的使用
     """
+    
+    # 初始化 LLM
+    llm = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
+        temperature=0.7
+    )
     
     print("""
 BabyAGI 工作原理:
@@ -449,7 +518,7 @@ BabyAGI 工作原理:
     print("示例 1: 研究任务")
     print("=" * 70)
     
-    agi1 = BabyAGI(objective="研究 Python 异步编程最佳实践")
+    agi1 = BabyAGI(objective="研究 Python 异步编程最佳实践", llm=llm)
     agi1.run()
     
     # 示例 2: 信息收集任务
@@ -457,7 +526,7 @@ BabyAGI 工作原理:
     print("示例 2: 信息收集任务")
     print("=" * 70)
     
-    agi2 = BabyAGI(objective="收集 2024 年 AI 发展趋势相关信息")
+    agi2 = BabyAGI(objective="收集 2024 年 AI 发展趋势相关信息", llm=llm)
     agi2.run()
     
     # 示例 3: 高级版本
@@ -465,7 +534,7 @@ BabyAGI 工作原理:
     print("示例 3: 高级 BabyAGI")
     print("=" * 70)
     
-    agi3 = AdvancedBabyAGI(objective="设计一个微服务架构方案")
+    agi3 = AdvancedBabyAGI(objective="设计一个微服务架构方案", llm=llm)
     agi3.run()
     
     print("\n执行摘要:")

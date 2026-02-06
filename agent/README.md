@@ -31,3 +31,28 @@ agent/
 | tRPC-Agent-Go | 多样化 Agent、高并发 | 微服务、生产环境 |
 
 各框架的详细用法和代码说明，请查看对应示例文件中的注释。
+
+## 开始运行
+
+### 1. 安装依赖
+
+```bash
+# 基础依赖（所有示例都需要）
+pip install langchain langchain-openai
+
+# 各框架特定依赖（按需安装）
+pip install langgraph           # LangGraph 工作流
+pip install crewai              # CrewAI 多 Agent 协作
+pip install pyautogen           # AutoGen 对话式协作
+pip install langchain-community ddgs  # 搜索工具
+```
+
+### 2. 配置 API Key
+
+创建编辑项目根目录 `config.py`，填入你的密钥, 参见 `config.py.sample` 
+
+### 3. 运行示例
+
+```bash
+python agent/langchain/01_basic_agent.py
+```

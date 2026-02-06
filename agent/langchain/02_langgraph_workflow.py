@@ -18,6 +18,8 @@ LangGraph 是 LangChain 的扩展，用于构建复杂的多步骤工作流。
 适用场景: 复杂业务流程、多步骤审批、循环优化任务
 """
 
+from langchain_core.messages.base import BaseMessage
+from langchain_openai.chat_models.base import ChatOpenAI
 from typing import TypedDict, Annotated, Sequence
 import operator
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
@@ -25,6 +27,11 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langchain_core.tools import tool
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
 
 
 # ============================================================
@@ -106,8 +113,13 @@ def agent_node(state: AgentState) -> AgentState:
     """
     print("\n[Agent Node] 正在分析请求...")
     
-    # 初始化 LLM
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    # 初始化 LLM（从根目录 config.py 读取）
+    llm: ChatOpenAI = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
+        temperature=0
+    )
     llm_with_tools = llm.bind_tools(tools)
     
     # 获取最后一条用户消息
@@ -160,7 +172,7 @@ def tool_node(state: AgentState) -> AgentState:
     print("\n[Tool Node] 执行工具...")
     
     # 获取最后一条消息的 tool_calls
-    last_message = state["messages"][-1]
+    last_message: BaseMessage = state["messages"][-1]
     
     if not hasattr(last_message, 'tool_calls'):
         return state

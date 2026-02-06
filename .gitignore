@@ -96,3 +96,5 @@ yarn-error.log*
 *.pyo
 *.pyd
 .Python
+
+config.py

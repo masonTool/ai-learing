@@ -22,6 +22,11 @@ CrewAI 是一个专注于多 Agent 协作的框架，灵感来自于企业团队
 from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
+
 
 # ============================================================
 # 第一部分: 创建不同角色的 Agent
@@ -37,9 +42,11 @@ def create_agents():
     3. 编辑 (Editor): 负责审核和润色
     """
     
-    # 共享的 LLM 配置
+    # 共享的 LLM 配置（从根目录 config.py 读取）
     llm = ChatOpenAI(
-        model="gpt-4o-mini",
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
         temperature=0.7
     )
     
@@ -233,12 +240,16 @@ def parallel_example():
     print("并行执行示例")
     print("=" * 70)
     
-    llm = ChatOpenAI(model="gpt-4o-mini")
-    
+    llm = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL
+    )
+
     # 创建三个独立的分析 Agent
     agents = []
     tasks = []
-    
+
     for i, aspect in enumerate(["技术角度", "市场角度", "社会影响"]):
         agent = Agent(
             role=f"{aspect}分析师",
@@ -279,8 +290,12 @@ def hierarchical_example():
     print("层级协作示例")
     print("=" * 70)
     
-    llm = ChatOpenAI(model="gpt-4o-mini")
-    
+    llm = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL
+    )
+
     # 创建项目经理 Agent
     manager = Agent(
         role="项目经理",

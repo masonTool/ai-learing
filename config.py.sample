@@ -1,0 +1,23 @@
+# 配置文件模板
+# 复制为 config.py 并填入真实密钥
+
+# ===== 月之暗面 Kimi =====
+# MODEL = "moonshot-v1-8k"
+# API_KEY = "sk-your-moonshot-key"
+# BASE_URL = "https://api.moonshot.cn/v1"
+
+# ===== OpenAI =====
+# MODEL = "gpt-4o-mini"
+# API_KEY = "sk-your-openai-key"
+# BASE_URL = None
+
+# ===== 智谱 AI =====
+# MODEL = "glm-4"
+# API_KEY = "your-zhipu-key"
+# BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
+
+# ===== 阿里通义 =====
+# MODEL = "qwen-turbo"
+# API_KEY = "your-dashscope-key"
+# BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+

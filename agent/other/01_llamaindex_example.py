@@ -26,8 +26,15 @@ LlamaIndex 是一个专注于"数据检索与 LLM 结合"的框架，核心理�
 适用场景: 知识库问答、文档分析、企业数据查询、RAG 应用
 """
 
-from typing import List, Dict, Any, Optional
+import sys
 import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config
+
+from typing import List, Dict, Any, Optional
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 
 
 # ============================================================
@@ -172,9 +179,17 @@ class RAGQueryEngine:
     4. 返回生成的回答
     """
     
-    def __init__(self, vector_store: SimpleVectorStore):
+    def __init__(self, vector_store: SimpleVectorStore, llm=None):
         self.vector_store = vector_store
         self.retrieval_top_k = 2
+        
+        # 初始化 LLM
+        self.llm = llm or ChatOpenAI(
+            model=config.MODEL,
+            api_key=config.API_KEY,
+            base_url=config.BASE_URL,
+            temperature=0.7
+        )
     
     def query(self, question: str) -> Dict[str, Any]:
         """
@@ -224,26 +239,30 @@ class RAGQueryEngine:
         """
         生成回答
         
-        实际使用会调用 LLM API:
-        response = openai.ChatCompletion.create(...)
-        
-        这里使用简化的模拟回答
+        调用 LLM 基于检索到的上下文生成回答
         """
-        # 基于上下文生成回答（简化版）
-        if "python" in question.lower():
-            return """基于检索到的文档，Python 是一种高级编程语言，由 Guido van Rossum 于 1991 年创建。
-它的设计哲学强调代码的可读性和简洁性，支持多种编程范式。
-在机器学习领域，Python 是最流行的编程语言，拥有丰富的库。"""
-        
-        elif "机器学习" in question or "machine learning" in question.lower():
-            return """根据检索结果，机器学习是人工智能的一个分支，使计算机能够从数据中学习。
-常见的算法包括监督学习、无监督学习和强化学习。
-Python 是机器学习最流行的编程语言。"""
-        
-        else:
-            return f"""基于检索到的 {len(context.split('文档'))-1} 个相关文档，
-我可以为您提供相关信息。检索到的内容涵盖多个技术主题，
-包括编程语言、人工智能、容器化和架构设计。"""
+        prompt = f"""基于以下检索到的文档内容，回答用户的问题。
+
+检索到的文档内容:
+{context}
+
+用户问题: {question}
+
+请根据上述文档内容，给出一个准确、简洁的回答。如果文档中没有相关信息，请明确说明。
+
+回答:"""
+
+        try:
+            messages = [
+                SystemMessage(content="你是一个知识库问答助手，基于提供的文档内容回答用户问题。"),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.llm.invoke(messages)
+            return response.content.strip()
+            
+        except Exception as e:
+            return f"生成回答时出错: {str(e)}"
 
 
 # ============================================================
@@ -257,9 +276,17 @@ class LlamaIndexAgent:
     Agent 可以使用 RAG 作为工具来查询知识库
     """
     
-    def __init__(self, query_engine: RAGQueryEngine):
+    def __init__(self, query_engine: RAGQueryEngine, llm=None):
         self.query_engine = query_engine
         self.memory = []
+        
+        # 初始化 LLM
+        self.llm = llm or ChatOpenAI(
+            model=config.MODEL,
+            api_key=config.API_KEY,
+            base_url=config.BASE_URL,
+            temperature=0.7
+        )
     
     def chat(self, message: str) -> str:
         """
@@ -269,17 +296,42 @@ class LlamaIndexAgent:
         """
         print(f"\n用户: {message}")
         
-        # 简单判断是否需要查询
-        # 实际使用会由 LLM 决定
-        if any(keyword in message.lower() for keyword in [
-            "什么", "介绍", "是什么", "如何", "what", "how", "explain"
-        ]):
-            # 使用 RAG 查询
-            result = self.query_engine.query(message)
-            response = f"{result['answer']}\n\n参考来源: {', '.join(result['sources'])}"
-        else:
-            # 普通对话
-            response = "您好！我可以帮您查询技术文档。请问有什么具体问题吗？"
+        # 使用 LLM 判断是否需要查询知识库
+        prompt = f"""判断以下用户消息是否需要查询知识库来获取信息。
+
+用户消息: {message}
+
+知识库包含以下主题的文档:
+- Python 编程语言
+- 机器学习
+- Docker 容器技术
+- 微服务架构
+
+如果用户问题涉及以上主题或需要事实性知识，请回复 "需要查询"。
+如果只是打招呼或闲聊，请回复 "不需要查询"。
+
+只回复 "需要查询" 或 "不需要查询"，不要其他内容。"""
+
+        try:
+            messages = [
+                SystemMessage(content="你是一个意图识别助手，判断是否需要查询知识库。"),
+                HumanMessage(content=prompt)
+            ]
+            
+            response = self.llm.invoke(messages)
+            decision = response.content.strip()
+            
+            if "需要查询" in decision or "需要" in decision:
+                # 使用 RAG 查询
+                result = self.query_engine.query(message)
+                response = f"{result['answer']}\n\n参考来源: {', '.join(result['sources'])}"
+            else:
+                # 普通对话
+                response = "您好！我可以帮您查询技术文档。请问有什么具体问题吗？"
+                
+        except Exception as e:
+            # 出错时回退到普通对话
+            response = f"您好！我可以帮您查询技术文档。请问有什么具体问题吗？(系统提示: {str(e)})"
         
         self.memory.append({"role": "user", "content": message})
         self.memory.append({"role": "assistant", "content": response})
@@ -299,6 +351,14 @@ def main():
     print("LlamaIndex RAG + Agent 示例")
     print("=" * 70)
     
+    # 初始化 LLM
+    llm = ChatOpenAI(
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
+        temperature=0.7
+    )
+    
     # Step 1: 创建数据
     print("\n【步骤 1】加载文档")
     print("-" * 50)
@@ -315,7 +375,7 @@ def main():
     print("索引创建完成")
     
     # Step 3: 创建查询引擎
-    query_engine = RAGQueryEngine(vector_store)
+    query_engine = RAGQueryEngine(vector_store, llm=llm)
     
     # Step 4: RAG 查询示例
     print("\n" + "=" * 70)
@@ -339,7 +399,7 @@ def main():
     print("Agent 对话示例")
     print("=" * 70)
     
-    agent = LlamaIndexAgent(query_engine)
+    agent = LlamaIndexAgent(query_engine, llm=llm)
     
     conversations = [
         "你好！",
