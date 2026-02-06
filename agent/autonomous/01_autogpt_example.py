@@ -189,42 +189,36 @@ class AutoGPT:
         这是 AutoGPT 的核心提示，指导 AI 的行为
         """
         
-        prompt = f"""你是 {self.ai_name}，一个自主 AI 助手。
+        tools_list = "\n".join(f"- {name}: {desc}" for name, desc in self.tools_desc.items())
 
-目标: {goal}
-
-可用工具:
-"""
-        for name, desc in self.tools_desc.items():
-            prompt += f"- {name}: {desc}\n"
-
-        prompt += """
-指令:
-1. 分析当前情况，思考如何完成目标
-2. 制定一个清晰的计划
-3. 选择合适的工具执行下一步
-4. 自我反思，确保计划合理
-5. 使用以下 JSON 格式响应:
-
-{
-    "thoughts": "当前情况的分析",
-    "reasoning": "为什么这样做",
-    "plan": "接下来的步骤",
-    "criticism": "自我反思",
-    "speak": "对用户的简要说明",
-    "action": {
-        "name": "工具名称",
-        "args": {"参数名": "参数值"}
-    }
-}
-
-重要:
-- 始终保持目标导向
-- 如果任务完成，使用 task_complete 工具
-- 不要编造信息，不确定时使用搜索工具
-- 反思你的计划是否合理高效
-
-"""
+        prompt = (
+            f"你是 {self.ai_name}，一个自主 AI 助手。\n\n"
+            f"目标: {goal}\n\n"
+            "可用工具:\n"
+            f"{tools_list}\n\n"
+            "指令:\n"
+            "1. 分析当前情况，思考如何完成目标\n"
+            "2. 制定一个清晰的计划\n"
+            "3. 选择合适的工具执行下一步\n"
+            "4. 自我反思，确保计划合理\n"
+            "5. 使用以下 JSON 格式响应:\n\n"
+            "{\n"
+            '    "thoughts": "当前情况的分析",\n'
+            '    "reasoning": "为什么这样做",\n'
+            '    "plan": "接下来的步骤",\n'
+            '    "criticism": "自我反思",\n'
+            '    "speak": "对用户的简要说明",\n'
+            '    "action": {\n'
+            '        "name": "工具名称",\n'
+            '        "args": {"参数名": "参数值"}\n'
+            "    }\n"
+            "}\n\n"
+            "重要:\n"
+            "- 始终保持目标导向\n"
+            "- 如果任务完成，使用 task_complete 工具\n"
+            "- 不要编造信息，不确定时使用搜索工具\n"
+            "- 反思你的计划是否合理高效\n"
+        )
         return prompt
     
     def _execute_action(self, action_name: str, action_args: Dict) -> str:

@@ -19,7 +19,8 @@ from langchain.prompts import PromptTemplate
 from langchain.memory import ConversationBufferMemory
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_openai import ChatOpenAI
-import os
+
+import config
 
 
 # ============================================================
@@ -56,20 +57,20 @@ tools = [
     Tool(
         name="web_search",
         func=search_tool.run,
-        description="""
-        当需要搜索互联网获取最新信息时使用此工具。
-        输入应该是搜索查询字符串。
-        适用于: 查询新闻、获取实时数据、搜索事实信息等。
-        """
+        description=(
+            "当需要搜索互联网获取最新信息时使用此工具。"
+            "输入应该是搜索查询字符串。"
+            "适用于: 查询新闻、获取实时数据、搜索事实信息等。"
+        )
     ),
     Tool(
         name="calculator",
         func=calculator,
-        description="""
-        当需要进行数学计算时使用此工具。
-        输入应该是数学表达式，如 '2 + 2' 或 '100 * 0.15'。
-        适用于: 加减乘除、百分比计算等。
-        """
+        description=(
+            "当需要进行数学计算时使用此工具。"
+            "输入应该是数学表达式，如 '2 + 2' 或 '100 * 0.15'。"
+            "适用于: 加减乘除、百分比计算等。"
+        )
     )
 ]
 
@@ -91,12 +92,12 @@ def create_basic_agent():
     这个过程会循环执行，直到 Agent 认为任务完成
     """
     
-    # 1. 初始化 LLM (大语言模型)
-    # temperature=0 让输出更确定，适合需要精确工具调用的场景
+    # 1. 初始化 LLM（从 config.py 读取）
     llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0,
-        # api_key="your-api-key"  # 或从环境变量读取
+        model=config.MODEL,
+        api_key=config.API_KEY,
+        base_url=config.BASE_URL,
+        temperature=0
     )
     
     # 2. 创建记忆组件
@@ -109,34 +110,27 @@ def create_basic_agent():
     
     # 3. 定义 ReAct Prompt 模板
     # 这是指导 Agent 行为的系统指令
-    template = """你是一个有用的 AI 助手，可以使用工具来帮助用户。
-
-可用工具:
-{tools}
-
-工具名称: {tool_names}
-
-使用以下格式:
-
-Question: 用户的问题
-Thought: 我应该如何解决这个问题
-Action: 要使用的工具名称（必须是 [{tool_names}] 之一）
-Action Input: 传递给工具的输入
-Observation: 工具返回的结果
-... (这个 Thought/Action/Action Input/Observation 可以重复多次)
-Thought: 我现在知道最终答案了
-Final Answer: 给用户的最终回答
-
-记住:
-1. 每次只能使用一个工具
-2. 必须严格按照格式输出
-3. 如果不需要工具，直接给出 Final Answer
-
-之前的对话历史:
-{chat_history}
-
-Question: {input}
-Thought: {agent_scratchpad}"""
+    template = (
+        "你是一个有用的 AI 助手，可以使用工具来帮助用户。\n\n"
+        "可用工具:\n{tools}\n\n"
+        "工具名称: {tool_names}\n\n"
+        "使用以下格式:\n\n"
+        "Question: 用户的问题\n"
+        "Thought: 我应该如何解决这个问题\n"
+        "Action: 要使用的工具名称（必须是 [{tool_names}] 之一）\n"
+        "Action Input: 传递给工具的输入\n"
+        "Observation: 工具返回的结果\n"
+        "... (这个 Thought/Action/Action Input/Observation 可以重复多次)\n"
+        "Thought: 我现在知道最终答案了\n"
+        "Final Answer: 给用户的最终回答\n\n"
+        "记住:\n"
+        "1. 每次只能使用一个工具\n"
+        "2. 必须严格按照格式输出\n"
+        "3. 如果不需要工具，直接给出 Final Answer\n\n"
+        "之前的对话历史:\n{chat_history}\n\n"
+        "Question: {input}\n"
+        "Thought: {agent_scratchpad}"
+    )
 
     prompt = PromptTemplate.from_template(template)
     

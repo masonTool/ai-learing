@@ -71,16 +71,16 @@ def basic_conversation_example():
     assistant = autogen.AssistantAgent(
         name="assistant",
         llm_config=llm_config,
-        system_message="""你是一个有帮助的 AI 助手。
-        
-你的职责:
-1. 回答用户的问题
-2. 如果需要写代码，使用 Python
-3. 代码要简洁、有注释、易于理解
-4. 如果任务完成，回复 "TERMINATE"
-        """
+        system_message=(
+            "你是一个有帮助的 AI 助手。\n\n"
+            "你的职责:\n"
+            "1. 回答用户的问题\n"
+            "2. 如果需要写代码，使用 Python\n"
+            "3. 代码要简洁、有注释、易于理解\n"
+            '4. 如果任务完成，回复 "TERMINATE"'
+        )
     )
-    
+
     # ========== 创建 UserProxyAgent ==========
     # 用户代理 Agent，代表人类用户
     # 可以执行代码、调用函数等
@@ -95,17 +95,17 @@ def basic_conversation_example():
             "use_docker": False,   # 不使用 Docker（生产环境建议开启）
         },
     )
-    
+
     # ========== 开始对话 ==========
     # initiate_chat 启动对话
     # message: 用户发送的第一条消息
-    message = """
-    请帮我写一个 Python 函数，计算斐波那契数列的前 n 个数，
-    并测试 n=10 的情况。要求:
-    1. 使用递归方式实现
-    2. 处理边界情况（n <= 0）
-    3. 添加函数文档字符串
-    """
+    message = (
+        "请帮我写一个 Python 函数，计算斐波那契数列的前 n 个数，"
+        "并测试 n=10 的情况。要求:\n"
+        "1. 使用递归方式实现\n"
+        "2. 处理边界情况（n <= 0）\n"
+        "3. 添加函数文档字符串"
+    )
     
     print(f"\n用户: {message}\n")
     

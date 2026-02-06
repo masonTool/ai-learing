@@ -114,11 +114,12 @@ def agent_node(state: AgentState) -> AgentState:
     last_message = state["messages"][-1].content if state["messages"] else ""
     
     # 构建系统提示
-    system_prompt = """你是一个智能助手，可以决定是否需要使用工具。
-如果需要搜索或计算，请使用相应工具。
-如果可以直接回答，请直接给出答案。
-
-当前迭代次数: {iteration}""".format(iteration=state["iteration_count"])
+    system_prompt = (
+        "你是一个智能助手，可以决定是否需要使用工具。\n"
+        "如果需要搜索或计算，请使用相应工具。\n"
+        "如果可以直接回答，请直接给出答案。\n\n"
+        f"当前迭代次数: {state['iteration_count']}"
+    )
     
     messages = [
         ("system", system_prompt),

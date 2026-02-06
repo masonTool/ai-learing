@@ -170,17 +170,15 @@ class PromptNode(Component):
     def __init__(self, model_name: str = "default", default_prompt_template: Optional[str] = None):
         super().__init__("PromptNode")
         self.model_name = model_name
-        self.default_prompt_template = default_prompt_template or """
-基于以下文档回答问题:
-
-文档:
-{% for doc in documents %}
-{{ doc.content }}
-{% endfor %}
-
-问题: {{ query }}
-
-回答:"""
+        self.default_prompt_template = default_prompt_template or (
+            "基于以下文档回答问题:\n\n"
+            "文档:\n"
+            "{% for doc in documents %}\n"
+            "{{ doc.content }}\n"
+            "{% endfor %}\n\n"
+            "问题: {{ query }}\n\n"
+            "回答:"
+        )
     
     def run(self, query: str, documents: List[Document]) -> Dict[str, Any]:
         """生成回答"""

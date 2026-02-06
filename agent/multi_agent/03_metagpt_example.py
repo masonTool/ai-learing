@@ -70,39 +70,32 @@ class WriteProductRequirement(Action):
         # 实际使用时会调用 LLM 生成 PRD
         # 这里使用模拟数据展示结构
         
-        prd = f"""
-# 产品需求文档 (PRD)
-
-## 1. 需求概述
-{requirement}
-
-## 2. 用户故事
-- 作为用户，我希望能快速完成任务
-- 作为管理员，我希望能管理系统设置
-
-## 3. 功能列表
-### 3.1 核心功能
-- 用户注册与登录
-- 个人信息管理
-- 数据展示与操作
-
-### 3.2 扩展功能
-- 通知系统
-- 数据分析
-
-## 4. 非功能需求
-- 性能: 页面加载时间 < 2秒
-- 安全: 数据加密存储
-- 可用性: 支持 99.9% 在线时间
-
-## 5. 界面原型
-[待设计]
-
-## 6. 验收标准
-- 所有功能按需求实现
-- 通过测试用例
-- 代码审查通过
-"""
+        prd = (
+            "# 产品需求文档 (PRD)\n\n"
+            "## 1. 需求概述\n"
+            f"{requirement}\n\n"
+            "## 2. 用户故事\n"
+            "- 作为用户，我希望能快速完成任务\n"
+            "- 作为管理员，我希望能管理系统设置\n\n"
+            "## 3. 功能列表\n"
+            "### 3.1 核心功能\n"
+            "- 用户注册与登录\n"
+            "- 个人信息管理\n"
+            "- 数据展示与操作\n\n"
+            "### 3.2 扩展功能\n"
+            "- 通知系统\n"
+            "- 数据分析\n\n"
+            "## 4. 非功能需求\n"
+            "- 性能: 页面加载时间 < 2秒\n"
+            "- 安全: 数据加密存储\n"
+            "- 可用性: 支持 99.9% 在线时间\n\n"
+            "## 5. 界面原型\n"
+            "[待设计]\n\n"
+            "## 6. 验收标准\n"
+            "- 所有功能按需求实现\n"
+            "- 通过测试用例\n"
+            "- 代码审查通过"
+        )
         return prd
 
 
@@ -126,78 +119,66 @@ class WriteTechnicalDesign(Action):
             技术设计文档
         """
         
-        design = """
-# 技术设计文档
-
-## 1. 架构概览
-- 架构风格: 微服务架构
-- 技术栈: Python + FastAPI + PostgreSQL + Redis
-- 部署: Docker + Kubernetes
-
-## 2. 系统架构图
-```
-┌─────────────┐
-│   前端      │  (React/Vue)
-└──────┬──────┘
-       │ HTTP/REST
-┌──────▼──────┐
-│  API 网关   │  (Nginx/Kong)
-└──────┬──────┘
-       │
-┌──────▼──────┐     ┌──────────┐
-│  业务服务   │────►│  数据库  │
-└─────────────┘     └──────────┘
-```
-
-## 3. 模块设计
-
-### 3.1 用户模块
-- 用户注册/登录 API
-- JWT Token 认证
-- 用户信息管理
-
-### 3.2 数据模块
-- CRUD 操作
-- 数据验证
-- 分页查询
-
-## 4. 数据库设计
-
-### 4.1 用户表 (users)
-```sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### 4.2 其他表...
-
-## 5. API 设计
-
-### 5.1 用户注册
-- POST /api/v1/auth/register
-- Request: {username, email, password}
-- Response: {user_id, token}
-
-### 5.2 用户登录
-- POST /api/v1/auth/login
-- Request: {email, password}
-- Response: {token, user_info}
-
-## 6. 安全设计
-- 密码加密存储 (bcrypt)
-- API 限流
-- 输入验证和 SQL 注入防护
-
-## 7. 性能考虑
-- 数据库索引优化
-- Redis 缓存热点数据
-- 异步处理耗时操作
+        design = (
+            "# 技术设计文档\n\n"
+            "## 1. 架构概览\n"
+            "- 架构风格: 微服务架构\n"
+            "- 技术栈: Python + FastAPI + PostgreSQL + Redis\n"
+            "- 部署: Docker + Kubernetes\n\n"
+            "## 2. 系统架构图\n"
+            "```\n"
+            "┌─────────────┐\n"
+            "│   前端      │  (React/Vue)\n"
+            "└──────┬──────┘\n"
+            "       │ HTTP/REST\n"
+            "┌──────▼──────┐\n"
+            "│  API 网关   │  (Nginx/Kong)\n"
+            "└──────┬──────┘\n"
+            "       │\n"
+            "┌──────▼──────┐     ┌──────────┐\n"
+            "│  业务服务   │────►│  数据库  │\n"
+            "└─────────────┘     └──────────┘\n"
+            "```\n\n"
+            "## 3. 模块设计\n\n"
+            "### 3.1 用户模块\n"
+            "- 用户注册/登录 API\n"
+            "- JWT Token 认证\n"
+            "- 用户信息管理\n\n"
+            "### 3.2 数据模块\n"
+            "- CRUD 操作\n"
+            "- 数据验证\n"
+            "- 分页查询\n\n"
+            "## 4. 数据库设计\n\n"
+            "### 4.1 用户表 (users)\n"
+            "```sql\n"
+            "CREATE TABLE users (\n"
+            "    id SERIAL PRIMARY KEY,\n"
+            "    username VARCHAR(50) UNIQUE NOT NULL,\n"
+            "    email VARCHAR(100) UNIQUE NOT NULL,\n"
+            "    password_hash VARCHAR(255) NOT NULL,\n"
+            "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n"
+            "    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n"
+            ");\n"
+            "```\n\n"
+            "### 4.2 其他表...\n\n"
+            "## 5. API 设计\n\n"
+            "### 5.1 用户注册\n"
+            "- POST /api/v1/auth/register\n"
+            "- Request: {username, email, password}\n"
+            "- Response: {user_id, token}\n\n"
+            "### 5.2 用户登录\n"
+            "- POST /api/v1/auth/login\n"
+            "- Request: {email, password}\n"
+            "- Response: {token, user_info}\n\n"
+            "## 6. 安全设计\n"
+            "- 密码加密存储 (bcrypt)\n"
+            "- API 限流\n"
+            "- 输入验证和 SQL 注入防护\n\n"
+            "## 7. 性能考虑\n"
+            "- 数据库索引优化\n"
+            "- Redis 缓存热点数据\n"
+            "- 异步处理耗时操作"
+        )
 """
         return design
 
